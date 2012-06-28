@@ -1,8 +1,11 @@
-"Author:  zzsu (vimtexhappy@gmail.com)
-"         Buffer list in statusline
-"         2011-02-14 07:07:48 v4.0
-"License: Copyright (c) 2001-2009, zzsu
-"         GNU General Public License version 2 for more details.
+"Author:	zzsu (vimtexhappy@gmail.com)
+"			Buffer list in statusline
+"			2011-02-14 07:07:48 v4.0
+"Modified:	BitRobt(sdqxcxh@gmail.com)
+"			fix some bugs under windows		
+"			fix some conflicts with NerdTree and Taglist plugin
+"License:	Copyright (c) 2001-2009, zzsu
+"			GNU General Public License version 2 for more details.
 
 if exists('loaded_buf_it') || &cp
     finish
@@ -29,39 +32,34 @@ hi NowBuf term=bold ctermfg=Cyan guifg=green guibg=blue gui=bold
 
 if exists("g:showInStatusbar")
     if !exists("g:statusbarUsrDef") || g:statusbarUsrDef == 0
-		"自定义
 		set statusline=%m\{%{&ff}:%{&fenc}:%Y}\ %{g:bufBStr}%#NowBuf#%{g:bufNStr}%#StatusLine#%{g:bufAStr}%<%=%c:%l/%L%<
-		"原来
-		"set statusline=%m\{%{&ff}:%{&fenc}:%Y}\ %{g:bufBStr}%#NowBuf#%{g:bufNStr}%#StatusLine#%{g:bufAStr}%<%=%c:%l/%L%<
-		"系统
-		"set statusline=\ %<%F[%1*%M%*%n%R%H]%=\ %y\ %0(%{&fileformat}\ [%{(&fenc==\"\"?&enc:&fenc).(&bomb?\",BOM\":\"\")}]\ %c:%l/%L%)
     endif
 endif
-"当前buf的index
+"buf index now
 let g:bufNowIdx = 0
-"多屏显示里当前的part
+"buf part now (for multi line)
 let s:bufNowPartIdx = 0
 
-"buf显示名称列表
+"buf names
 let s:bufs = {}
-"buf对应内部序号表
+"buf indexes
 let s:bufnrs = {}
 
-"多屏显示part列表
+"buf Part(for multi line)
 let s:bufPartStrList = []
 
 function! CloseDefaultBuf()
-    "存在默认buffer就关掉
+    "if there is a default buf just close it
 	if buflisted(1) && empty(bufname(1))
 		exec 'bd1'
 	endif
 	call UpdateStatus()
 endfun
 
-"取消键映射
+"unmap the keys
 function! BufUnMap()
     for i in keys(s:bufs)
-		"小于10个文件,bufs按序排队
+		"less than 10 files
         if i < 10
             exec "silent! unmap <M-".i.">"
         else
@@ -69,7 +67,7 @@ function! BufUnMap()
         endif
     endfor
 endfun
-"映射键位
+"map keys
 function! BufMap()
     for i in keys(s:bufs)
         if i < 10
@@ -80,12 +78,15 @@ function! BufMap()
     endfor
 endfunction
 
-"关闭其他所有的buf
+"close other bufs
 function! BufOnly()
     let i = 1
-	"bufnr('$')返回最后一个缓冲区,buflisted(i)判断i号缓冲区是否存在,buwinnr包含缓冲区i的窗口，winnr返回当前窗口
+	"bufnr('$')will return the last buf,
+	"buflisted(i) judges if the ist buf exists,
+	"buwinnr return the window contains the buf,
+	"winnr return the default window
     while(i <= bufnr('$'))
-		"第i个缓冲区存在且可编辑且不在当前窗口，关闭之
+		"the ist buffer exists and can be modified
         if buflisted(i) && getbufvar(i, "&modifiable")
                     \   && (bufwinnr(i) != winnr())
             exec 'bw'.i
@@ -95,7 +96,7 @@ function! BufOnly()
     call UpdateStatus()
 endfun
 
-"关闭函数
+"close the buf
 function! BufClose(force)
 	if(!a:force && &modified)
 		echohl WarningMsg | echo "Buffer Modified!" | echohl None
@@ -104,14 +105,17 @@ function! BufClose(force)
 	let cmd=a:force?'bd!':'bd'
 	let qcmd=a:force?'q!':'q'
 	call UpdateStatus()
+	"deal conflicts with NerdTree
 	if exists("t:NERDTreeBufName") && bufname("%")==t:NERDTreeBufName
 		return
 	endif
-	"非编辑窗口，直接bd
+	"it's not the window which is being edited
 	if index(values(s:bufnrs),winbufnr(0))==-1
 		exec cmd
-	"编辑窗口，如果只有一个，退出，如果多个，有nerdtree切换，关闭,否则直接关闭
+	"the window is being edited and multi buffer openen.
 	elseif len(s:bufnrs)>1
+		"nerdtree opened, switch to the next buffer and close the buffer
+		"before.It's just a bug.
 		if exists("t:NERDTreeBufName")
 			let ibufNow=bufnr("%")
 			call BufNextPart() 
@@ -119,6 +123,8 @@ function! BufClose(force)
 		else 
 			exec cmd
 		endif
+	"only one buf.close it for three times.One is for the current buf, another
+	"for nerdtree, the last for taglist.
 	else 
 		exec qcmd 
 		exec qcmd 
@@ -127,17 +133,18 @@ function! BufClose(force)
 	call UpdateStatus()
 endfun
 
-"切换到某个buf
+"switch to some buf
 function! BufChange(idx)
-	"bufnrs按序存放
     exec 'b! '.s:bufnrs[a:idx]
 	let g:bufNowIdx=a:idx
 endfunction
-"分割显示某个buf
-"function! BufSplit(idx)
-    "exec 'sb! '.s:bufnrs[a:idx]
-"endfunction
-"下一个buf
+
+"split window to show some buffer
+function! BufSplit(idx)
+    exec 'sb! '.s:bufnrs[a:idx]
+endfunction
+
+"switch to the next buf
 function! BufNextPart()
 	call UpdateStatus()
 	if index(values(s:bufnrs),winbufnr(0))==-1
@@ -150,7 +157,8 @@ function! BufNextPart()
 	call BufChange(g:bufNowIdx)
 	call UpdateBufPartStr()
 endfunction
-"上一个buf
+
+"switch to the pre buf
 function! BufPrevPart()
 	call UpdateStatus()
 	if index(values(s:bufnrs),winbufnr(0))==-1
@@ -166,18 +174,18 @@ endfunction
 
 function! UpdateBufPartStr()
     let [g:bufBStr, g:bufNStr, g:bufAStr] = s:bufPartStrList[s:bufNowPartIdx]
-	"超过一屏,之前有显示'<<'
+	"one screen is not enough add '<<'
     if s:bufNowPartIdx > 0
         let g:bufBStr = '<<'.g:bufBStr
     endif
-	"超过一屏,之后有显示'>>'
+	"one screen is not enough add '>>'
     if s:bufNowPartIdx < len(s:bufPartStrList)-1
         let g:bufAStr = g:bufAStr.'>>'
     endif
 endfunction
 
 function! UpdateStatus()
-	"取消所有的键位,全部清空数组
+	"unmap all keys
     call BufUnMap()
     let s:bufs = {}
     let s:bufNowPartIdx = 0
@@ -186,11 +194,10 @@ function! UpdateStatus()
     let idx = 1
     let i = 1
 	
-	"从第一个到当前buf
     while(i <= bufnr('$'))
-		"存在且可编辑
+		"exists and modifiable
         if buflisted(i) && getbufvar(i, "&modifiable")
-            "bufName类似 1-buf_it.vim+,bufs按序存放buf名，bufnrs按序存放内部id
+            "bufName: like 1-buf_it.vim+
 			let bufName  =  idx."-"
             let bufName .= fnamemodify(bufname(i), ":t")
             let bufName .= getbufvar(i, "&modified")? "+":''
@@ -205,32 +212,31 @@ function! UpdateStatus()
         return
     endif
 	
-	"最大容许宽度
+	"the max width
     let widthForBufStr = winwidth(0) - g:statusbarKeepWidth
     let [POSB,POSN,POSA] = [0, 1, 2]
     let [strB,strN,strA] = ["", "", ""]
     let strPos = POSB
     let partIdx = 0
-	"遍历所有缓冲区并显示
+	"
     for i in keys(s:bufs)
         let bufName = s:bufs[i]
 		
-		"遍历到当前缓冲区
+		"the current buffer
         if bufnr("%") == s:bufnrs[i]
-			"置当前缓冲区
             let strPos = POSN
         endif
 
-		"没到当前缓冲区
+		"buffer before
         if strPos == POSB
             let strB .= bufName
-		"当前缓冲区
+		"buffer now
         elseif strPos == POSN
             let strN .= bufName
             let strPos = POSA
-			"当前缓冲区所在的bufpart
+			"get the buffer part which contains buffer now
             let s:bufNowPartIdx = partIdx
-		"过了当前缓冲区
+		"buffer past
         elseif strPos == POSA
             let strA .= bufName
         endif
@@ -256,10 +262,5 @@ function! BufEcho()
 	echo msg
 endfunction
 
-"function! NERDTree_Exit_Only_Window()
-	"echo 'test'
-	"if count(bufnrs)==1
-		"exec 'q'
-"endfunction
 
 
