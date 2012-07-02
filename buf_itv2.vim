@@ -102,17 +102,22 @@ function! BufClose(force)
 		echohl WarningMsg | echo "Buffer Modified!" | echohl None
 		return
 	endif
+
 	let cmd=a:force?'bd!':'bd'
 	let qcmd=a:force?'q!':'q'
-	call UpdateStatus()
+	
 	"deal conflicts with NerdTree
 	if exists("t:NERDTreeBufName") && bufname("%")==t:NERDTreeBufName
 		return
 	endif
+
+	"the window is command line window, just exit
+	if (bufname("%")=='[Command Line]')
+		exec qcmd
 	"it's not the window which is being edited
-	if index(values(s:bufnrs),winbufnr(0))==-1
+	elseif index(values(s:bufnrs),winbufnr(0))==-1
 		exec cmd
-	"the window is being edited and multi buffer openen.
+	"the window is being edited and multi buffer opened.
 	elseif len(s:bufnrs)>1
 		"nerdtree opened, switch to the next buffer and close the buffer
 		"before.It's just a bug.
@@ -123,6 +128,7 @@ function! BufClose(force)
 		else 
 			exec cmd
 		endif
+
 	"only one buf.close it for three times.One is for the current buf, another
 	"for nerdtree, the last for taglist.
 	else 
@@ -258,7 +264,8 @@ endfunction
 
 function! BufEcho()
 	redraw
-	let msg = g:bufBStr.'['.g:bufNStr.']'.g:bufAStr
+	"let msg = g:bufBStr.'['.g:bufNStr.']'.g:bufAStr
+	let msg=fnamemodify(bufname("%"),":p")
 	echo msg
 endfunction
 
