@@ -1,1 +1,1 @@
-t's a plugin to manage buffers in vim. I modified it from here (http://www.vim.org/scripts/script.php?script_id=2833) and fixed some bugs especially under window.Thanks to the original author. 
+It's a plugin to manage buffers in vim. I modified it from here (http://www.vim.org/scripts/script.php?script_id=2833) and fixed some bugs especially under Windows.Thanks to the original author. 
